@@ -15,9 +15,21 @@ const Upload: React.FC = () => {
   
   const [formData, setFormData] = useState({
     title: '',
+    category: 'Other',
     description: '',
     expiryDate: ''
   });
+
+  const categories = [
+    'Aadhar Card',
+    'PAN Card',
+    'Driving License',
+    'Voter ID',
+    'Passport',
+    'Marksheet',
+    'Certificate',
+    'Other'
+  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -27,6 +39,13 @@ const Upload: React.FC = () => {
         return;
       }
       setFile(selectedFile);
+      
+      // Auto-set title if empty
+      if (!formData.title) {
+        const fileName = selectedFile.name.split('.')[0];
+        setFormData(prev => ({ ...prev, title: fileName }));
+      }
+
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onloadend = () => setPreview(reader.result as string);
@@ -66,6 +85,7 @@ const Upload: React.FC = () => {
           {
             user_id: user.id,
             title: formData.title,
+            category: formData.category,
             description: formData.description,
             file_url: publicUrl,
             file_path: filePath,
@@ -139,16 +159,38 @@ const Upload: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Document Title</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Graduation Certificate"
-                className="input-field w-full"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-slate-300">Document Category</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, category: cat })}
+                      className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center justify-center space-y-2 ${
+                        formData.category === cat 
+                        ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-[0_0_15px_-3px_rgba(59,130,246,0.2)]' 
+                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      <span className="text-center">{cat}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-300">Document Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. My Graduation Certificate"
+                  className="input-field w-full"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Documents List */}
-      <div className="space-y-4">
+      <div className="space-y-8">
         <h2 className="text-xl font-semibold">Your Documents</h2>
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -128,60 +128,82 @@ const Dashboard: React.FC = () => {
             <p className="text-slate-400">No documents found. Start by uploading one!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documents.map((doc) => (
-              <motion.div
-                key={doc.id}
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="card flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="bg-blue-500/10 p-2 rounded-lg text-blue-400">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <button 
-                      onClick={() => deleteDocument(doc.id, doc.file_path)}
-                      className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+          <div className="space-y-12">
+            {Object.entries(
+              documents.reduce((acc, doc) => {
+                const category = doc.category || 'Other';
+                if (!acc[category]) acc[category] = [];
+                acc[category].push(doc);
+                return acc;
+              }, {} as Record<string, Document[]>)
+            ).map(([category, docs]) => (
+              <div key={category} className="space-y-6">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-slate-800/50 px-4 py-1.5 rounded-full border border-slate-700/50 flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">{category}</span>
+                    <span className="text-xs text-slate-500 font-medium ml-2">{docs.length} {docs.length === 1 ? 'file' : 'files'}</span>
                   </div>
-                  <h3 className="text-lg font-bold truncate">{doc.title}</h3>
-                  {profile?.role === 'admin' && (
-                    <p className="text-xs text-blue-400 font-medium mb-1">Owner: {doc.profiles?.name || 'Unknown'}</p>
-                  )}
-                  <p className="text-sm text-slate-400 mt-1 line-clamp-2">{doc.description}</p>
+                  <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {docs.map((doc) => (
+                    <motion.div
+                      key={doc.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="card flex flex-col justify-between group"
+                    >
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="bg-blue-500/10 p-2 rounded-lg text-blue-400">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <button 
+                            onClick={() => deleteDocument(doc.id, doc.file_path)}
+                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                        <h3 className="text-lg font-bold truncate">{doc.title}</h3>
+                        {profile?.role === 'admin' && (
+                          <p className="text-xs text-blue-400 font-medium mb-1">Owner: {doc.profiles?.name || 'Unknown'}</p>
+                        )}
+                        <p className="text-sm text-slate-400 mt-1 line-clamp-2">{doc.description}</p>
+                      </div>
 
-                <div className="mt-6 pt-6 border-t border-slate-800 space-y-4">
-                  <div className="flex items-center text-xs text-slate-500 space-x-4">
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="w-3 h-3" />
-                      <span>{format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Link 
-                      to={`/verify/${doc.id}`}
-                      className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center space-x-2"
-                    >
-                      <QrIcon className="w-4 h-4" />
-                      <span>View QR</span>
-                    </Link>
-                    <a 
-                      href={doc.file_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="p-2 btn-secondary"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
+                      <div className="mt-6 pt-6 border-t border-slate-800 space-y-4">
+                        <div className="flex items-center text-xs text-slate-500 space-x-4">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="w-3 h-3" />
+                            <span>{format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Link 
+                            to={`/verify/${doc.id}`}
+                            className="flex-1 btn-secondary text-sm py-2 flex items-center justify-center space-x-2"
+                          >
+                            <QrIcon className="w-4 h-4" />
+                            <span>View QR</span>
+                          </Link>
+                          <a 
+                            href={doc.file_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-2 btn-secondary"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}
