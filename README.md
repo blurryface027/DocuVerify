@@ -22,6 +22,8 @@ DocuVerify is a modern, production-grade document verification platform. It allo
 
 ## ⚙️ Setup Instructions
 
+
+
 ### 1. Clone & Install
 ```bash
 git clone <repository-url>
