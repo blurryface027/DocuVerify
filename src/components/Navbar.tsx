@@ -5,13 +5,19 @@ import {
   Shield, 
   LayoutDashboard, 
   LogOut, 
-  FilePlus, 
   Menu, 
   X, 
   Layers,
   Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+type NavLink = {
+  name: string;
+  path: string;
+  icon: React.ElementType | null;
+  primary?: boolean;
+};
 
 const Navbar: React.FC = () => {
   const { user, profile, signOut } = useAuth();
@@ -25,7 +31,7 @@ const Navbar: React.FC = () => {
     setIsOpen(false);
   };
 
-  const navLinks = user ? [
+  const navLinks: NavLink[] = user ? [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Single Upload', path: '/upload', icon: Upload },
     { name: 'Bulk Upload', path: '/bulk-upload', icon: Layers },
