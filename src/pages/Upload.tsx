@@ -11,12 +11,16 @@ import {
   Calendar, 
   Camera, 
   CreditCard, 
-  GraduationCap,
-  Award,
+  IdCard,
+  Car,
+  Globe,
+  UserCheck,
+  GraduationCap, 
+  Award, 
   Scan,
   CheckCircle2,
   AlertCircle,
-  Eye
+  ShoppingBag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,10 +28,14 @@ import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
 
 const categoryConfig: Record<string, { icon: any, color: string, field: string, placeholder: string }> = {
-  'Government ID': { icon: CreditCard, color: 'text-blue-400', field: 'ID Number', placeholder: 'xxxx xxxx xxxx' },
-  'Academic': { icon: GraduationCap, color: 'text-yellow-400', field: 'Roll Number', placeholder: 'Roll No / Enrollment No' },
-  'Certificate': { icon: Award, color: 'text-emerald-400', field: 'Certificate ID', placeholder: 'Certificate No' },
-  'Screenshot': { icon: Eye, color: 'text-purple-400', field: 'Reference No', placeholder: 'Optional ID' },
+  'Aadhar Card': { icon: CreditCard, color: 'text-blue-400', field: 'Aadhar Number', placeholder: 'xxxx xxxx xxxx' },
+  'PAN Card': { icon: IdCard, color: 'text-orange-400', field: 'PAN Number', placeholder: 'ABCDE1234F' },
+  'Driving License': { icon: Car, color: 'text-green-400', field: 'DL Number', placeholder: 'SS-RR-YYYYNNNNNNN' },
+  'Ration Card': { icon: ShoppingBag, color: 'text-emerald-400', field: 'Ration Card No', placeholder: 'Enter Ration Card Number' },
+  'Voter ID': { icon: UserCheck, color: 'text-purple-400', field: 'Voter ID No', placeholder: 'ABC1234567' },
+  'Passport': { icon: Globe, color: 'text-cyan-400', field: 'Passport Number', placeholder: 'A1234567' },
+  'Marksheet': { icon: GraduationCap, color: 'text-yellow-400', field: 'Roll Number', placeholder: 'Roll No / Enrollment No' },
+  'Certificate': { icon: Award, color: 'text-pink-400', field: 'Certificate ID', placeholder: 'Certificate No' },
   'Other': { icon: FileIcon, color: 'text-slate-400', field: 'Document Number', placeholder: 'ID Number (if any)' },
 };
 
@@ -193,7 +201,7 @@ const Upload: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto pt-8 pb-16 px-4">
+    <div className="max-w-5xl mx-auto pt-8 pb-16 px-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -337,7 +345,7 @@ const Upload: React.FC = () => {
                 <label className="text-sm font-medium text-slate-300 flex items-center space-x-2">
                   <span>1. Select Document Category</span>
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
                   {Object.keys(categoryConfig).map(catName => {
                     const cat = categoryConfig[catName];
                     return (

@@ -20,7 +20,8 @@ import {
   Globe,
   GraduationCap,
   Award,
-  FileText
+  FileText,
+  ShoppingBag
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
@@ -32,6 +33,7 @@ const categoryIcons: Record<string, any> = {
   'Aadhar Card': CreditCard,
   'PAN Card': IdCard,
   'Driving License': Car,
+  'Ration Card': ShoppingBag,
   'Voter ID': UserCheck,
   'Passport': Globe,
   'Marksheet': GraduationCap,
@@ -43,10 +45,11 @@ const categoryColors: Record<string, string> = {
   'Aadhar Card': 'text-blue-400 bg-blue-500/10',
   'PAN Card': 'text-orange-400 bg-orange-500/10',
   'Driving License': 'text-green-400 bg-green-500/10',
+  'Ration Card': 'text-emerald-400 bg-emerald-500/10',
   'Voter ID': 'text-purple-400 bg-purple-500/10',
   'Passport': 'text-cyan-400 bg-cyan-500/10',
   'Marksheet': 'text-yellow-400 bg-yellow-500/10',
-  'Certificate': 'text-emerald-400 bg-emerald-500/10',
+  'Certificate': 'text-pink-400 bg-pink-500/10',
   'Other': 'text-slate-400 bg-slate-500/10',
 };
 
