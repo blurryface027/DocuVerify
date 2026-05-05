@@ -23,6 +23,7 @@ export type Document = {
   title: string;
   category: string;
   description: string;
+  document_number?: string;
   file_url: string;
   file_path: string;
   created_at: string;

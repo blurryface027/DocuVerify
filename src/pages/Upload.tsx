@@ -1,15 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Upload as UploadIcon, File, X, Loader2, Calendar } from 'lucide-react';
+import { 
+  Upload as UploadIcon, 
+  FileIcon, 
+  X, 
+  Loader2, 
+  Calendar, 
+  Camera, 
+  CreditCard, 
+  IdCard, 
+  Car, 
+  UserCheck, 
+  Globe, 
+  GraduationCap, 
+  Award, 
+  Scan,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import Webcam from 'react-webcam';
+import Tesseract from 'tesseract.js';
+
+const categoryConfig = [
+  { name: 'Aadhar Card', icon: CreditCard, color: 'text-blue-400', field: 'Aadhar Number', placeholder: 'xxxx xxxx xxxx' },
+  { name: 'PAN Card', icon: IdCard, color: 'text-orange-400', field: 'PAN Number', placeholder: 'ABCDE1234F' },
+  { name: 'Driving License', icon: Car, color: 'text-green-400', field: 'DL Number', placeholder: 'SS-RR-YYYYNNNNNNN' },
+  { name: 'Voter ID', icon: UserCheck, color: 'text-purple-400', field: 'Voter ID Number', placeholder: 'ABC1234567' },
+  { name: 'Passport', icon: Globe, color: 'text-cyan-400', field: 'Passport Number', placeholder: 'A1234567' },
+  { name: 'Marksheet', icon: GraduationCap, color: 'text-yellow-400', field: 'Roll Number', placeholder: 'Roll No / Enrollment No' },
+  { name: 'Certificate', icon: Award, color: 'text-emerald-400', field: 'Certificate ID', placeholder: 'Certificate No' },
+  { name: 'Other', icon: FileIcon, color: 'text-slate-400', field: 'Document Number', placeholder: 'ID Number (if any)' },
+];
 
 const Upload: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const webcamRef = useRef<Webcam>(null);
+  
   const [loading, setLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   
@@ -17,22 +51,20 @@ const Upload: React.FC = () => {
     title: '',
     category: 'Other',
     description: '',
-    expiryDate: ''
+    expiryDate: '',
+    documentNumber: ''
   });
 
-  const categories = [
-    'Aadhar Card',
-    'PAN Card',
-    'Driving License',
-    'Voter ID',
-    'Passport',
-    'Marksheet',
-    'Certificate',
-    'Other'
-  ];
+  const selectedCategory = categoryConfig.find(c => c.name === formData.category) || categoryConfig[7];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement> | File) => {
+    let selectedFile: File | null = null;
+    if (e instanceof File) {
+      selectedFile = e;
+    } else if (e.target.files) {
+      selectedFile = e.target.files[0] || null;
+    }
+
     if (selectedFile) {
       if (selectedFile.size > 5 * 1024 * 1024) {
         toast.error('File size must be less than 5MB');
@@ -40,7 +72,6 @@ const Upload: React.FC = () => {
       }
       setFile(selectedFile);
       
-      // Auto-set title if empty
       if (!formData.title) {
         const fileName = selectedFile.name.split('.')[0];
         setFormData(prev => ({ ...prev, title: fileName }));
@@ -48,11 +79,66 @@ const Upload: React.FC = () => {
 
       if (selectedFile.type.startsWith('image/')) {
         const reader = new FileReader();
-        reader.onloadend = () => setPreview(reader.result as string);
+        reader.onloadend = () => {
+          setPreview(reader.result as string);
+          processOCR(reader.result as string);
+        };
         reader.readAsDataURL(selectedFile);
       } else {
         setPreview(null);
       }
+    }
+  };
+
+  const capture = useCallback(() => {
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (imageSrc) {
+      setPreview(imageSrc);
+      setIsCameraOpen(false);
+      
+      // Convert base64 to File
+      fetch(imageSrc)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], "captured-doc.jpg", { type: "image/jpeg" });
+          setFile(file);
+          if (!formData.title) {
+            setFormData(prev => ({ ...prev, title: 'Captured Document' }));
+          }
+          processOCR(imageSrc);
+        });
+    }
+  }, [webcamRef, formData.title]);
+
+  const processOCR = async (image: string) => {
+    setIsProcessing(true);
+    const toastId = toast.loading('Extracting details from document...');
+    try {
+      const { data: { text } } = await Tesseract.recognize(image, 'eng');
+      console.log('OCR Text:', text);
+      
+      // Basic regex for Aadhar, PAN, etc.
+      let foundNumber = '';
+      
+      if (formData.category === 'Aadhar Card') {
+        const match = text.match(/\d{4}\s\d{4}\s\d{4}/);
+        if (match) foundNumber = match[0];
+      } else if (formData.category === 'PAN Card') {
+        const match = text.match(/[A-Z]{5}\d{4}[A-Z]{1}/);
+        if (match) foundNumber = match[0];
+      }
+      
+      if (foundNumber) {
+        setFormData(prev => ({ ...prev, documentNumber: foundNumber }));
+        toast.success('Details fetched automatically!', { id: toastId });
+      } else {
+        toast.dismiss(toastId);
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      toast.error('Could not extract details automatically', { id: toastId });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -62,7 +148,6 @@ const Upload: React.FC = () => {
 
     setLoading(true);
     try {
-      // 1. Upload to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
@@ -73,12 +158,10 @@ const Upload: React.FC = () => {
 
       if (uploadError) throw uploadError;
 
-      // 2. Get Public URL
       const { data: { publicUrl } } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
 
-      // 3. Save metadata to DB
       const { error: dbError } = await supabase
         .from('documents')
         .insert([
@@ -87,6 +170,7 @@ const Upload: React.FC = () => {
             title: formData.title,
             category: formData.category,
             description: formData.description,
+            document_number: formData.documentNumber,
             file_url: publicUrl,
             file_path: filePath,
             expiry_date: formData.expiryDate || null
@@ -105,125 +189,262 @@ const Upload: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto pt-8">
+    <div className="max-w-4xl mx-auto pt-8 pb-16 px-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card space-y-8"
+        className="space-y-8"
       >
-        <div className="flex items-center space-x-4">
-          <div className="bg-blue-500/10 p-3 rounded-xl text-blue-500">
-            <UploadIcon className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Upload Document</h1>
-            <p className="text-slate-400">Securely store and share your file.</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="bg-blue-500/10 p-3 rounded-2xl text-blue-500 ring-1 ring-blue-500/20">
+              <UploadIcon className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                Add New Document
+              </h1>
+              <p className="text-slate-400">Securely digitize and manage your official documents.</p>
+            </div>
           </div>
         </div>
 
-        <form onSubmit={handleUpload} className="space-y-6">
-          {/* File Upload Area */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">File (Image or PDF, max 5MB)</label>
-            {!file ? (
-              <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-700 rounded-2xl cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition-all">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <UploadIcon className="w-10 h-10 text-slate-500 mb-3" />
-                  <p className="text-sm text-slate-400">Click to upload or drag and drop</p>
+        <form onSubmit={handleUpload} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column: Upload & Preview */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="card !p-2 overflow-hidden">
+              <div className="aspect-[3/4] relative rounded-lg overflow-hidden bg-slate-950 group">
+                <AnimatePresence mode="wait">
+                  {isCameraOpen ? (
+                    <motion.div 
+                      key="camera"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-10"
+                    >
+                      <Webcam
+                        audio={false}
+                        ref={webcamRef}
+                        screenshotFormat="image/jpeg"
+                        className="w-full h-full object-cover"
+                        videoConstraints={{ facingMode: "environment" }}
+                      />
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-4 px-4">
+                        <button 
+                          type="button"
+                          onClick={() => setIsCameraOpen(false)}
+                          className="btn-secondary !rounded-full p-3 shadow-lg"
+                        >
+                          <X className="w-6 h-6" />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={capture}
+                          className="bg-white hover:bg-slate-200 text-slate-950 p-4 rounded-full shadow-lg transition-transform active:scale-90"
+                        >
+                          <Camera className="w-8 h-8" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : preview ? (
+                    <motion.div 
+                      key="preview"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0"
+                    >
+                      <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
+                        <button 
+                          type="button"
+                          onClick={() => { setFile(null); setPreview(null); }}
+                          className="p-3 bg-red-500/80 hover:bg-red-500 rounded-full text-white transition-all transform hover:scale-110"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setIsCameraOpen(true)}
+                          className="p-3 bg-blue-500/80 hover:bg-blue-500 rounded-full text-white transition-all transform hover:scale-110"
+                        >
+                          <Camera className="w-5 h-5" />
+                        </button>
+                      </div>
+                      {isProcessing && (
+                        <div className="absolute inset-0 bg-blue-500/20 backdrop-blur-[2px] flex flex-col items-center justify-center text-white">
+                          <Scan className="w-12 h-12 animate-pulse mb-2" />
+                          <span className="text-sm font-medium">Scanning for details...</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  ) : (
+                    <motion.label 
+                      key="upload"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-colors border-2 border-dashed border-slate-800 rounded-lg m-2"
+                    >
+                      <div className="p-4 rounded-full bg-slate-900 mb-4 ring-1 ring-slate-800">
+                        <UploadIcon className="w-8 h-8 text-slate-500" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-300">Click to upload</p>
+                      <p className="text-xs text-slate-500 mt-1">or drag and drop</p>
+                      
+                      <div className="mt-8 flex flex-col items-center">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-4">OR</span>
+                        <button 
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); setIsCameraOpen(true); }}
+                          className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-white transition-all"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span>Use Camera</span>
+                        </button>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                    </motion.label>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            
+            {preview && (
+              <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl flex items-start space-x-3">
+                <CheckCircle2 className="w-5 h-5 text-blue-500 mt-0.5" />
+                <div className="text-xs text-slate-400">
+                  <p className="text-blue-400 font-semibold mb-1">Image Loaded</p>
+                  <p>Our system has scanned the document. Please verify the auto-filled details below.</p>
                 </div>
-                <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} required />
-              </label>
-            ) : (
-              <div className="relative group">
-                <div className="flex items-center p-4 bg-slate-800 rounded-xl border border-slate-700">
-                  <File className="w-8 h-8 text-blue-400 mr-3" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                    <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => { setFile(null); setPreview(null); }}
-                    className="p-2 text-slate-500 hover:text-white transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                {preview && (
-                  <div className="mt-4 rounded-xl overflow-hidden border border-slate-700 max-h-48">
-                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-                  </div>
-                )}
               </div>
             )}
           </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-slate-300">Document Category</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {categories.map(cat => (
+          {/* Right Column: Form Details */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="card space-y-6">
+              <div className="space-y-4">
+                <label className="text-sm font-medium text-slate-300 flex items-center space-x-2">
+                  <span>1. Select Document Category</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {categoryConfig.map(cat => (
                     <button
-                      key={cat}
+                      key={cat.name}
                       type="button"
-                      onClick={() => setFormData({ ...formData, category: cat })}
-                      className={`p-3 rounded-xl border text-sm font-medium transition-all flex flex-col items-center justify-center space-y-2 ${
-                        formData.category === cat 
-                        ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-[0_0_15px_-3px_rgba(59,130,246,0.2)]' 
-                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-500'
+                      onClick={() => setFormData({ ...formData, category: cat.name })}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col items-center justify-center space-y-3 relative group ${
+                        formData.category === cat.name 
+                        ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500/50' 
+                        : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
                       }`}
                     >
-                      <span className="text-center">{cat}</span>
+                      <cat.icon className={`w-6 h-6 ${formData.category === cat.name ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                      <span className={`text-[11px] font-bold text-center uppercase tracking-wider ${formData.category === cat.name ? 'text-white' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                        {cat.name}
+                      </span>
+                      {formData.category === cat.name && (
+                        <div className="absolute top-2 right-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Document Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. My Graduation Certificate"
-                  className="input-field w-full"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                />
+              <div className="h-px bg-slate-800" />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Document Title</label>
+                  <div className="relative">
+                    <FileIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. My Aadhar Card"
+                      className="input-field w-full pl-11"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300 flex items-center justify-between">
+                    <span>{selectedCategory.field}</span>
+                    {formData.documentNumber && (
+                      <span className="text-[10px] text-emerald-500 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Auto-fetched</span>
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <selectedCategory.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      placeholder={selectedCategory.placeholder}
+                      className={`input-field w-full pl-11 ${formData.documentNumber ? 'border-emerald-500/50 bg-emerald-500/5' : ''}`}
+                      value={formData.documentNumber}
+                      onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Description</label>
-              <textarea
-                placeholder="Optional description..."
-                className="input-field w-full h-24 resize-none"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Expiry Date (If applicable)</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                    <input
+                      type="date"
+                      className="input-field w-full pl-11"
+                      value={formData.expiryDate}
+                      onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Additional Notes</label>
+                  <input
+                    type="text"
+                    placeholder="Optional description..."
+                    className="input-field w-full"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Expiry Date (Optional)</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                <input
-                  type="date"
-                  className="input-field w-full pl-10"
-                  value={formData.expiryDate}
-                  onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                />
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={loading || !file}
+                  className={`btn-primary w-full py-4 flex items-center justify-center space-x-3 !rounded-2xl transition-all ${(!file || loading) ? 'opacity-50 cursor-not-allowed grayscale' : 'shadow-[0_0_20px_-5px_rgba(37,99,235,0.4)]'}`}
+                >
+                  {loading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <>
+                      <UploadIcon className="w-6 h-6" />
+                      <span className="text-lg">Finalize & Upload</span>
+                    </>
+                  )}
+                </button>
+                {!file && (
+                  <p className="text-center text-xs text-slate-500 mt-4 flex items-center justify-center space-x-2">
+                    <AlertCircle className="w-3 h-3" />
+                    <span>Please upload or capture a document to continue</span>
+                  </p>
+                )}
               </div>
             </div>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading || !file}
-            className="btn-primary w-full py-4 flex items-center justify-center space-x-2"
-          >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <span>Upload Document</span>}
-          </button>
         </form>
       </motion.div>
     </div>
