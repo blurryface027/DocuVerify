@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import type { Document } from '../lib/supabase';
+import type { Document, DocumentGroup } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   FileText, 
@@ -18,9 +18,10 @@ import {
   Globe,
   GraduationCap,
   Award,
-  Hash
+  Layers,
+  ChevronRight
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -33,6 +34,9 @@ const categoryIcons: Record<string, any> = {
   'Marksheet': GraduationCap,
   'Certificate': Award,
   'Other': FileText,
+  'Government ID': CreditCard,
+  'Academic': GraduationCap,
+  'Screenshot': Eye,
 };
 
 const categoryColors: Record<string, string> = {
@@ -43,42 +47,69 @@ const categoryColors: Record<string, string> = {
   'Passport': 'text-cyan-400 bg-cyan-500/10',
   'Marksheet': 'text-yellow-400 bg-yellow-500/10',
   'Certificate': 'text-emerald-400 bg-emerald-500/10',
+  'Government ID': 'text-blue-400 bg-blue-500/10',
+  'Academic': 'text-yellow-400 bg-yellow-500/10',
+  'Screenshot': 'text-purple-400 bg-purple-500/10',
   'Other': 'text-slate-400 bg-slate-500/10',
 };
 
 const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [groups, setGroups] = useState<(DocumentGroup & { document_count: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, scans: 0 });
+  const [activeTab, setActiveTab] = useState<'individual' | 'bundles'>('individual');
 
   useEffect(() => {
     if (user) {
-      fetchDocuments();
+      fetchData();
     }
   }, [user, profile]);
 
-  const fetchDocuments = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      let query = supabase
+      // 1. Fetch Individual Documents (not in groups)
+      let docQuery = supabase
         .from('documents')
         .select('*, profiles(name)')
+        .is('group_id', null)
         .order('created_at', { ascending: false });
 
       if (profile?.role !== 'admin') {
-        query = query.eq('user_id', user?.id);
+        docQuery = docQuery.eq('user_id', user?.id);
       }
 
-      const { data, error } = await query;
+      const { data: docs, error: docError } = await docQuery;
+      if (docError) throw docError;
+      setDocuments(docs || []);
 
-      if (error) throw error;
-      setDocuments(data || []);
+      // 2. Fetch Groups
+      let groupQuery = supabase
+        .from('document_groups')
+        .select('*, documents(id)')
+        .order('created_at', { ascending: false });
+
+      if (profile?.role !== 'admin') {
+        groupQuery = groupQuery.eq('user_id', user?.id);
+      }
+
+      const { data: groupData, error: groupError } = await groupQuery;
+      if (groupError) throw groupError;
+      
+      const formattedGroups = (groupData || []).map(g => ({
+        ...g,
+        document_count: (g.documents as any[]).length
+      }));
+      setGroups(formattedGroups);
       
       setStats({
-        total: data?.length || 0,
+        total: (docs?.length || 0) + (groupData?.reduce((acc, g) => acc + (g.documents as any[]).length, 0) || 0),
         scans: 0
       });
     } catch (error: any) {
+      console.error('Fetch error:', error);
       toast.error(error.message);
     } finally {
       setLoading(false);
@@ -103,7 +134,30 @@ const Dashboard: React.FC = () => {
       if (dbError) throw dbError;
 
       toast.success('Document deleted successfully');
-      fetchDocuments();
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const deleteGroup = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this bundle? All documents inside will be removed.')) return;
+    
+    try {
+      // 1. Get documents to delete files from storage
+      const { data: docs } = await supabase.from('documents').select('file_path').eq('group_id', id);
+      if (docs && docs.length > 0) {
+        await supabase.storage.from('documents').remove(docs.map(d => d.file_path));
+      }
+
+      // 2. Delete group (documents will be deleted if ON DELETE CASCADE is set, 
+      // but we'll do it manually just in case)
+      await supabase.from('documents').delete().eq('group_id', id);
+      const { error } = await supabase.from('document_groups').delete().eq('id', id);
+
+      if (error) throw error;
+      toast.success('Bundle deleted successfully');
+      fetchData();
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -121,10 +175,16 @@ const Dashboard: React.FC = () => {
           </h1>
           <p className="text-slate-400 mt-1">Manage your digital vault and verification keys.</p>
         </motion.div>
-        <Link to="/upload" className="btn-primary flex items-center space-x-2 !px-6 !py-3 !rounded-xl shadow-lg shadow-blue-600/20">
-          <Plus className="w-5 h-5" />
-          <span>Add Document</span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link to="/bulk-upload" className="btn-secondary !bg-indigo-600/10 hover:!bg-indigo-600/20 !text-indigo-400 !border-indigo-500/20 flex items-center space-x-2 !px-6 !py-3 !rounded-xl">
+            <Layers className="w-5 h-5" />
+            <span>Bulk Upload</span>
+          </Link>
+          <Link to="/upload" className="btn-primary flex items-center space-x-2 !px-6 !py-3 !rounded-xl shadow-lg shadow-blue-600/20">
+            <Plus className="w-5 h-5" />
+            <span>Add Single</span>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -154,147 +214,197 @@ const Dashboard: React.FC = () => {
         >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Verified Scans</p>
-              <p className="text-4xl font-bold mt-2">{stats.scans}</p>
+              <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Active Bundles</p>
+              <p className="text-4xl font-bold mt-2">{groups.length}</p>
             </div>
             <div className="bg-indigo-500/20 p-4 rounded-2xl text-indigo-400">
-              <Eye className="w-8 h-8" />
+              <Layers className="w-8 h-8" />
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Documents List */}
-      <div className="space-y-12">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-2xl font-bold">Your Documents</h2>
-          <div className="h-px flex-1 bg-slate-800" />
-        </div>
+      {/* Tab Selector */}
+      <div className="flex space-x-1 bg-slate-900/50 p-1 rounded-2xl w-fit border border-slate-800">
+        <button
+          onClick={() => setActiveTab('individual')}
+          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'individual' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Single Documents
+        </button>
+        <button
+          onClick={() => setActiveTab('bundles')}
+          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'bundles' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          Verified Bundles
+        </button>
+      </div>
 
+      {/* Content List */}
+      <div className="space-y-12">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[1, 2, 3].map(i => (
               <div key={i} className="card h-64 animate-pulse bg-slate-900/50 rounded-2xl" />
             ))}
           </div>
-        ) : documents.length === 0 ? (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-24 card border-dashed border-slate-800 bg-slate-900/20"
-          >
-            <div className="bg-slate-800/50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <FileText className="w-10 h-10 text-slate-600" />
-            </div>
-            <p className="text-xl font-medium text-slate-300">No documents found</p>
-            <p className="text-slate-500 mt-2">Upload your first document to get started.</p>
-            <Link to="/upload" className="mt-8 inline-flex btn-secondary">
-              Go to Upload
-            </Link>
-          </motion.div>
         ) : (
-          <div className="space-y-16">
-            {Object.entries(
-              documents.reduce((acc, doc) => {
-                const category = doc.category || 'Other';
-                if (!acc[category]) acc[category] = [];
-                acc[category].push(doc);
-                return acc;
-              }, {} as Record<string, Document[]>)
-            ).map(([category, docs], idx) => (
-              <div key={category} className="space-y-8">
-                <div className="flex items-center space-x-4">
-                  <div className={`px-4 py-2 rounded-xl border border-slate-700/50 flex items-center space-x-3 ${categoryColors[category] || categoryColors['Other']}`}>
-                    {React.createElement(categoryIcons[category] || FileText, { className: "w-5 h-5" })}
-                    <span className="text-sm font-bold uppercase tracking-widest">{category}</span>
-                    <div className="w-1 h-1 rounded-full bg-current opacity-30" />
-                    <span className="text-sm font-medium opacity-70">{docs.length}</span>
+          <AnimatePresence mode="wait">
+            {activeTab === 'individual' ? (
+              <motion.div 
+                key="individual"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-12"
+              >
+                {documents.length === 0 ? (
+                  <div className="text-center py-24 card border-dashed border-slate-800 bg-slate-900/20">
+                    <FileText className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                    <p className="text-slate-500">No individual documents found.</p>
                   </div>
-                  <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {docs.map((doc, docIdx) => {
-                    const Icon = categoryIcons[category] || FileText;
-                    return (
-                      <motion.div
-                        key={doc.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: (idx * 0.1) + (docIdx * 0.05) }}
-                        className="card flex flex-col justify-between group !p-0 overflow-hidden hover:shadow-2xl hover:shadow-blue-500/10 transition-all border-slate-800/50"
-                      >
-                        <div className="p-6 space-y-4">
-                          <div className="flex justify-between items-start">
-                            <div className={`p-3 rounded-2xl ${categoryColors[category] || categoryColors['Other']}`}>
-                              <Icon className="w-6 h-6" />
-                            </div>
-                            <div className="flex space-x-1">
-                              <button 
-                                onClick={() => deleteDocument(doc.id, doc.file_path)}
-                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                ) : (
+                  <div className="space-y-16">
+                    {Object.entries(
+                      documents.reduce((acc, doc) => {
+                        const category = doc.category || 'Other';
+                        if (!acc[category]) acc[category] = [];
+                        acc[category].push(doc);
+                        return acc;
+                      }, {} as Record<string, Document[]>)
+                    ).map(([category, docs]) => (
+                      <div key={category} className="space-y-8">
+                        <div className="flex items-center space-x-4">
+                          <div className={`px-4 py-2 rounded-xl border border-slate-700/50 flex items-center space-x-3 ${categoryColors[category] || categoryColors['Other']}`}>
+                            {React.createElement(categoryIcons[category] || FileText, { className: "w-5 h-5" })}
+                            <span className="text-sm font-bold uppercase tracking-widest">{category}</span>
+                            <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                            <span className="text-sm font-medium opacity-70">{docs.length}</span>
+                          </div>
+                          <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                          {docs.map((doc) => {
+                            const Icon = categoryIcons[category] || FileText;
+                            return (
+                              <motion.div
+                                key={doc.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="card flex flex-col justify-between group !p-0 overflow-hidden hover:shadow-2xl hover:shadow-blue-500/10 transition-all border-slate-800/50"
                               >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
-                            </div>
+                                <div className="p-6 space-y-4">
+                                  <div className="flex justify-between items-start">
+                                    <div className={`p-3 rounded-2xl ${categoryColors[category] || categoryColors['Other']}`}>
+                                      <Icon className="w-6 h-6" />
+                                    </div>
+                                    <button 
+                                      onClick={() => deleteDocument(doc.id, doc.file_path)}
+                                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                  <div>
+                                    <h3 className="text-xl font-bold truncate group-hover:text-blue-400 transition-colors">{doc.title}</h3>
+                                    <p className="text-sm text-slate-400 mt-2 line-clamp-2 leading-relaxed">{doc.description || 'No description provided.'}</p>
+                                  </div>
+                                </div>
+                                <div className="bg-slate-950/50 p-6 border-t border-slate-800 space-y-4">
+                                  <div className="flex items-center justify-between text-xs font-medium">
+                                    <div className="flex items-center space-x-2 text-slate-500">
+                                      <Calendar className="w-4 h-4" />
+                                      <span>{format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-3">
+                                    <Link to={`/verify/${doc.id}`} className="flex-1 btn-secondary !bg-slate-800 hover:!bg-blue-600 text-sm py-2.5 flex items-center justify-center space-x-2 !rounded-xl transition-all">
+                                      <QrIcon className="w-4 h-4" />
+                                      <span>Verify</span>
+                                    </Link>
+                                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="p-2.5 btn-secondary !bg-slate-800 hover:!bg-slate-700 !rounded-xl transition-all">
+                                      <ExternalLink className="w-5 h-5" />
+                                    </a>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="bundles"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+              >
+                {groups.length === 0 ? (
+                  <div className="col-span-full text-center py-24 card border-dashed border-slate-800 bg-slate-900/20">
+                    <Layers className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                    <p className="text-slate-500">No verified bundles found.</p>
+                  </div>
+                ) : (
+                  groups.map((group, idx) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="card flex flex-col justify-between group !p-0 overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all border-indigo-500/20 border-l-4 border-l-indigo-500"
+                    >
+                      <div className="p-6 space-y-6">
+                        <div className="flex justify-between items-start">
+                          <div className="bg-indigo-500/10 p-4 rounded-2xl text-indigo-400">
+                            <Layers className="w-8 h-8" />
                           </div>
-
-                          <div>
-                            <h3 className="text-xl font-bold truncate group-hover:text-blue-400 transition-colors">{doc.title}</h3>
-                            {profile?.role === 'admin' && (
-                              <p className="text-xs text-blue-400 font-bold uppercase tracking-tighter mt-1">Owner: {doc.profiles?.name || 'Unknown'}</p>
-                            )}
-                            <p className="text-sm text-slate-400 mt-2 line-clamp-2 leading-relaxed">{doc.description || 'No description provided.'}</p>
+                          <button 
+                            onClick={() => deleteGroup(group.id)}
+                            className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <h3 className="text-2xl font-bold truncate group-hover:text-indigo-400 transition-colors">{group.group_name}</h3>
+                          <div className="flex items-center space-x-2">
+                            <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold uppercase tracking-widest">
+                              {group.document_count} Documents
+                            </span>
+                            <span className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter">Verified Bundle</span>
                           </div>
-
-                          {doc.document_number && (
-                            <div className="flex items-center space-x-2 bg-slate-950/50 p-3 rounded-xl border border-slate-800/50">
-                              <Hash className="w-4 h-4 text-slate-500" />
-                              <span className="text-sm font-mono text-slate-300">{doc.document_number}</span>
-                            </div>
-                          )}
                         </div>
 
-                        <div className="bg-slate-950/50 p-6 border-t border-slate-800 space-y-4">
-                          <div className="flex items-center justify-between text-xs font-medium">
-                            <div className="flex items-center space-x-2 text-slate-500">
-                              <Calendar className="w-4 h-4" />
-                              <span>{format(new Date(doc.created_at), 'MMM d, yyyy')}</span>
-                            </div>
-                            {doc.expiry_date && (
-                              <div className="flex items-center space-x-2 text-orange-400/80">
-                                <Calendar className="w-4 h-4" />
-                                <span>Exp: {format(new Date(doc.expiry_date), 'MMM d, yy')}</span>
-                              </div>
-                            )}
+                        <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/50 flex items-center justify-between">
+                          <div className="flex items-center space-x-2 text-xs text-slate-500">
+                            <Calendar className="w-4 h-4" />
+                            <span>Created {format(new Date(group.created_at), 'MMM d')}</span>
                           </div>
-                          
-                          <div className="flex gap-3">
-                            <Link 
-                              to={`/verify/${doc.id}`}
-                              className="flex-1 btn-secondary !bg-slate-800 hover:!bg-blue-600 text-sm py-2.5 flex items-center justify-center space-x-2 !rounded-xl transition-all"
-                            >
-                              <QrIcon className="w-4 h-4" />
-                              <span>Verify Access</span>
-                            </Link>
-                            <a 
-                              href={doc.file_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="p-2.5 btn-secondary !bg-slate-800 hover:!bg-slate-700 !rounded-xl transition-all"
-                              title="Open Original"
-                            >
-                              <ExternalLink className="w-5 h-5" />
-                            </a>
-                          </div>
+                          <ChevronRight className="w-4 h-4 text-slate-700 group-hover:text-indigo-500 transition-colors" />
                         </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+                      </div>
+
+                      <div className="bg-slate-950/50 p-6 border-t border-slate-800">
+                        <div className="flex gap-3">
+                          <Link to={`/verify/group/${group.id}`} className="flex-1 btn-primary !bg-indigo-600 hover:!bg-indigo-700 text-sm py-3 flex items-center justify-center space-x-2 !rounded-xl shadow-lg shadow-indigo-600/20 transition-all">
+                            <QrIcon className="w-5 h-5" />
+                            <span>Bundle QR</span>
+                          </Link>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
     </div>

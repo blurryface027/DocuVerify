@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { categorizeFile, type DocCategory } from '../utils/categorization';
 import { 
   Upload as UploadIcon, 
   FileIcon, 
@@ -10,31 +11,25 @@ import {
   Calendar, 
   Camera, 
   CreditCard, 
-  IdCard, 
-  Car, 
-  UserCheck, 
-  Globe, 
-  GraduationCap, 
-  Award, 
+  GraduationCap,
+  Award,
   Scan,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import Webcam from 'react-webcam';
 import Tesseract from 'tesseract.js';
 
-const categoryConfig = [
-  { name: 'Aadhar Card', icon: CreditCard, color: 'text-blue-400', field: 'Aadhar Number', placeholder: 'xxxx xxxx xxxx' },
-  { name: 'PAN Card', icon: IdCard, color: 'text-orange-400', field: 'PAN Number', placeholder: 'ABCDE1234F' },
-  { name: 'Driving License', icon: Car, color: 'text-green-400', field: 'DL Number', placeholder: 'SS-RR-YYYYNNNNNNN' },
-  { name: 'Voter ID', icon: UserCheck, color: 'text-purple-400', field: 'Voter ID Number', placeholder: 'ABC1234567' },
-  { name: 'Passport', icon: Globe, color: 'text-cyan-400', field: 'Passport Number', placeholder: 'A1234567' },
-  { name: 'Marksheet', icon: GraduationCap, color: 'text-yellow-400', field: 'Roll Number', placeholder: 'Roll No / Enrollment No' },
-  { name: 'Certificate', icon: Award, color: 'text-emerald-400', field: 'Certificate ID', placeholder: 'Certificate No' },
-  { name: 'Other', icon: FileIcon, color: 'text-slate-400', field: 'Document Number', placeholder: 'ID Number (if any)' },
-];
+const categoryConfig: Record<string, { icon: any, color: string, field: string, placeholder: string }> = {
+  'Government ID': { icon: CreditCard, color: 'text-blue-400', field: 'ID Number', placeholder: 'xxxx xxxx xxxx' },
+  'Academic': { icon: GraduationCap, color: 'text-yellow-400', field: 'Roll Number', placeholder: 'Roll No / Enrollment No' },
+  'Certificate': { icon: Award, color: 'text-emerald-400', field: 'Certificate ID', placeholder: 'Certificate No' },
+  'Screenshot': { icon: Eye, color: 'text-purple-400', field: 'Reference No', placeholder: 'Optional ID' },
+  'Other': { icon: FileIcon, color: 'text-slate-400', field: 'Document Number', placeholder: 'ID Number (if any)' },
+};
 
 const Upload: React.FC = () => {
   const { user } = useAuth();
@@ -49,13 +44,13 @@ const Upload: React.FC = () => {
   
   const [formData, setFormData] = useState({
     title: '',
-    category: 'Other',
+    category: 'Other' as DocCategory,
     description: '',
     expiryDate: '',
     documentNumber: ''
   });
 
-  const selectedCategory = categoryConfig.find(c => c.name === formData.category) || categoryConfig[7];
+  const selectedCategory = categoryConfig[formData.category] || categoryConfig['Other'];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement> | File) => {
     let selectedFile: File | null = null;
@@ -72,9 +67,17 @@ const Upload: React.FC = () => {
       }
       setFile(selectedFile);
       
+      const detectedCategory = categorizeFile(selectedFile.name, selectedFile.type);
+      
       if (!formData.title) {
         const fileName = selectedFile.name.split('.')[0];
-        setFormData(prev => ({ ...prev, title: fileName }));
+        setFormData(prev => ({ 
+          ...prev, 
+          title: fileName,
+          category: detectedCategory
+        }));
+      } else {
+        setFormData(prev => ({ ...prev, category: detectedCategory }));
       }
 
       if (selectedFile.type.startsWith('image/')) {
@@ -96,14 +99,20 @@ const Upload: React.FC = () => {
       setPreview(imageSrc);
       setIsCameraOpen(false);
       
-      // Convert base64 to File
       fetch(imageSrc)
         .then(res => res.blob())
         .then(blob => {
           const file = new File([blob], "captured-doc.jpg", { type: "image/jpeg" });
           setFile(file);
+          const detectedCategory = categorizeFile(file.name, file.type);
           if (!formData.title) {
-            setFormData(prev => ({ ...prev, title: 'Captured Document' }));
+            setFormData(prev => ({ 
+              ...prev, 
+              title: 'Captured Document',
+              category: detectedCategory
+            }));
+          } else {
+            setFormData(prev => ({ ...prev, category: detectedCategory }));
           }
           processOCR(imageSrc);
         });
@@ -115,18 +124,13 @@ const Upload: React.FC = () => {
     const toastId = toast.loading('Extracting details from document...');
     try {
       const { data: { text } } = await Tesseract.recognize(image, 'eng');
-      console.log('OCR Text:', text);
       
-      // Basic regex for Aadhar, PAN, etc.
       let foundNumber = '';
+      const aadharMatch = text.match(/\d{4}\s\d{4}\s\d{4}/);
+      const panMatch = text.match(/[A-Z]{5}\d{4}[A-Z]{1}/);
       
-      if (formData.category === 'Aadhar Card') {
-        const match = text.match(/\d{4}\s\d{4}\s\d{4}/);
-        if (match) foundNumber = match[0];
-      } else if (formData.category === 'PAN Card') {
-        const match = text.match(/[A-Z]{5}\d{4}[A-Z]{1}/);
-        if (match) foundNumber = match[0];
-      }
+      if (aadharMatch) foundNumber = aadharMatch[0];
+      else if (panMatch) foundNumber = panMatch[0];
       
       if (foundNumber) {
         setFormData(prev => ({ ...prev, documentNumber: foundNumber }));
@@ -333,29 +337,32 @@ const Upload: React.FC = () => {
                 <label className="text-sm font-medium text-slate-300 flex items-center space-x-2">
                   <span>1. Select Document Category</span>
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {categoryConfig.map(cat => (
-                    <button
-                      key={cat.name}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, category: cat.name })}
-                      className={`p-4 rounded-2xl border transition-all flex flex-col items-center justify-center space-y-3 relative group ${
-                        formData.category === cat.name 
-                        ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500/50' 
-                        : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <cat.icon className={`w-6 h-6 ${formData.category === cat.name ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
-                      <span className={`text-[11px] font-bold text-center uppercase tracking-wider ${formData.category === cat.name ? 'text-white' : 'text-slate-500 group-hover:text-slate-400'}`}>
-                        {cat.name}
-                      </span>
-                      {formData.category === cat.name && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {Object.keys(categoryConfig).map(catName => {
+                    const cat = categoryConfig[catName];
+                    return (
+                      <button
+                        key={catName}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, category: catName as DocCategory })}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col items-center justify-center space-y-3 relative group ${
+                          formData.category === catName 
+                          ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500/50' 
+                          : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <cat.icon className={`w-6 h-6 ${formData.category === catName ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                        <span className={`text-[10px] font-bold text-center uppercase tracking-wider ${formData.category === catName ? 'text-white' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                          {catName}
+                        </span>
+                        {formData.category === catName && (
+                          <div className="absolute top-2 right-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

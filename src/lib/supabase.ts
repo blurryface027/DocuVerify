@@ -17,6 +17,13 @@ export type Profile = {
   created_at: string;
 };
 
+export type DocumentGroup = {
+  id: string;
+  user_id: string;
+  group_name: string;
+  created_at: string;
+};
+
 export type Document = {
   id: string;
   user_id: string;
@@ -26,6 +33,7 @@ export type Document = {
   document_number?: string;
   file_url: string;
   file_path: string;
+  group_id?: string;
   created_at: string;
   expiry_date?: string;
   profiles?: Profile;
@@ -34,6 +42,7 @@ export type Document = {
 export type ScanHistory = {
   id: string;
   document_id: string;
+  group_id?: string;
   scanned_at: string;
   ip_address?: string;
 };

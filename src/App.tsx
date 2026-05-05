@@ -8,7 +8,9 @@ import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import Upload from './pages/Upload';
+import BulkUpload from './pages/BulkUpload';
 import Verify from './pages/Verify';
+import VerifyGroup from './pages/VerifyGroup';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -33,6 +35,7 @@ const App: React.FC = () => {
             <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/verify/:id" element={<Verify />} />
+            <Route path="/verify/group/:id" element={<VerifyGroup />} />
             
             {/* Protected Routes */}
             <Route path="/dashboard" element={
@@ -43,6 +46,11 @@ const App: React.FC = () => {
             <Route path="/upload" element={
               <ProtectedRoute>
                 <Upload />
+              </ProtectedRoute>
+            } />
+            <Route path="/bulk-upload" element={
+              <ProtectedRoute>
+                <BulkUpload />
               </ProtectedRoute>
             } />
           </Routes>
