@@ -279,31 +279,37 @@ const Upload: React.FC = () => {
                       )}
                     </motion.div>
                   ) : (
-                    <motion.label 
-                      key="upload"
+                    <motion.div 
+                      key="upload-options"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/50 transition-colors border-2 border-dashed border-slate-800 rounded-lg m-2"
+                      className="absolute inset-0 p-4 flex flex-col space-y-4"
                     >
-                      <div className="p-4 rounded-full bg-slate-900 mb-4 ring-1 ring-slate-800">
-                        <UploadIcon className="w-8 h-8 text-slate-500" />
+                      <label className="flex-1 flex flex-col items-center justify-center cursor-pointer bg-slate-900/50 hover:bg-slate-900 transition-all border-2 border-dashed border-slate-800 hover:border-blue-500/50 rounded-2xl group">
+                        <div className="p-4 rounded-full bg-slate-950 mb-3 group-hover:scale-110 transition-transform">
+                          <UploadIcon className="w-8 h-8 text-blue-500" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-200">Upload Document</p>
+                        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">PDF, JPG, PNG (Max 5MB)</p>
+                        <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                      </label>
+
+                      <div className="flex items-center space-x-4">
+                        <div className="h-px flex-1 bg-slate-800" />
+                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">OR</span>
+                        <div className="h-px flex-1 bg-slate-800" />
                       </div>
-                      <p className="text-sm font-medium text-slate-300">Click to upload</p>
-                      <p className="text-xs text-slate-500 mt-1">or drag and drop</p>
-                      
-                      <div className="mt-8 flex flex-col items-center">
-                        <span className="text-[10px] uppercase tracking-widest text-slate-600 font-bold mb-4">OR</span>
-                        <button 
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); setIsCameraOpen(true); }}
-                          className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-white transition-all"
-                        >
-                          <Camera className="w-4 h-4" />
-                          <span>Use Camera</span>
-                        </button>
-                      </div>
-                      <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
-                    </motion.label>
+
+                      <button 
+                        type="button"
+                        onClick={() => setIsCameraOpen(true)}
+                        className="py-6 flex flex-col items-center justify-center bg-blue-600/5 hover:bg-blue-600/10 transition-all border border-blue-500/20 hover:border-blue-500/40 rounded-2xl group"
+                      >
+                        <Camera className="w-8 h-8 text-blue-400 mb-2 group-hover:scale-110 transition-transform" />
+                        <p className="text-sm font-bold text-blue-400">Scan via Camera</p>
+                        <p className="text-[10px] text-blue-500/50 mt-1 uppercase tracking-widest">Instant Auto-fill</p>
+                      </button>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
