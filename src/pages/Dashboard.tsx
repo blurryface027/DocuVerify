@@ -225,16 +225,16 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Tab Selector */}
-      <div className="flex space-x-1 bg-slate-900/50 p-1 rounded-2xl w-fit border border-slate-800">
+      <div className="flex space-x-1 bg-slate-900/50 p-1 rounded-2xl w-full sm:w-fit border border-slate-800">
         <button
           onClick={() => setActiveTab('individual')}
-          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'individual' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${activeTab === 'individual' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-slate-300'}`}
         >
-          Single Documents
+          Single Files
         </button>
         <button
           onClick={() => setActiveTab('bundles')}
-          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'bundles' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+          className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${activeTab === 'bundles' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
         >
           Verified Bundles
         </button>

@@ -145,7 +145,7 @@ const VerifyGroup: React.FC = () => {
               <div className="p-4 rounded-2xl bg-indigo-500/10 text-indigo-400">
                 <Layers className="w-10 h-10" />
               </div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
                 {group.group_name}
               </h2>
               <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-widest text-indigo-500">
@@ -155,12 +155,13 @@ const VerifyGroup: React.FC = () => {
               </div>
             </div>
 
-            <div ref={qrRef} className="bg-white p-6 rounded-2xl inline-block shadow-2xl">
+            <div ref={qrRef} className="bg-white p-4 sm:p-6 rounded-2xl inline-block shadow-2xl">
               <QRCodeSVG 
                 value={verificationUrl} 
-                size={220} 
+                size={200} 
                 level="H"
                 includeMargin={false}
+                className="w-40 h-40 sm:w-48 sm:h-48 lg:w-52 lg:h-52"
               />
             </div>
             

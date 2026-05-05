@@ -261,8 +261,8 @@ const BulkUpload: React.FC = () => {
                       transition={{ delay: i * 0.05 }}
                       className="card !p-4 group hover:border-indigo-500/50 transition-all bg-slate-900/50"
                     >
-                      <div className="flex items-start gap-4">
-                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-950 flex-shrink-0 border border-slate-800">
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                        <div className="w-full sm:w-20 h-32 sm:h-20 rounded-lg overflow-hidden bg-slate-950 flex-shrink-0 border border-slate-800">
                           {f.file.type === 'application/pdf' ? (
                             <div className="w-full h-full flex items-center justify-center bg-red-500/10 text-red-400">
                               <FileText className="w-8 h-8" />

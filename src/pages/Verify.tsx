@@ -158,12 +158,13 @@ const Verify: React.FC = () => {
               <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400">{doc.category}</h2>
             </div>
 
-            <div ref={qrRef} className="bg-white p-6 rounded-2xl inline-block shadow-2xl">
+            <div ref={qrRef} className="bg-white p-4 sm:p-6 rounded-2xl inline-block shadow-2xl">
               <QRCodeSVG 
                 value={verificationUrl} 
-                size={200} 
+                size={180} 
                 level="H"
                 includeMargin={false}
+                className="w-40 h-40 sm:w-48 sm:h-48 lg:w-52 lg:h-52"
               />
             </div>
             
@@ -218,7 +219,7 @@ const Verify: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.title}</h1>
+                <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.title}</h1>
               </div>
               <a 
                 href={doc.file_url} 
