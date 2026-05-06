@@ -4,12 +4,20 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Mail, Lock, User, Loader2, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 
 const Auth: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const [isSignUp, setIsSignUp] = useState(searchParams.get('signup') === 'true');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
 
   const [formData, setFormData] = useState({
     email: '',
