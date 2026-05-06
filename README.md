@@ -22,8 +22,6 @@ DocuVerify is a modern, production-grade document verification platform. It allo
 
 ## ⚙️ Setup Instructions
 
-
-
 ### 1. Clone & Install
 ```bash
 git clone <repository-url>
@@ -57,12 +55,33 @@ create policy "Users can update own profile." on profiles
   for update using (auth.uid() = id);
 ```
 
+#### Table: `document_groups`
+```sql
+create table document_groups (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users not null,
+  group_name text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS
+alter table document_groups enable row level security;
+
+create policy "Users can view their own document groups" on document_groups for select using (auth.uid() = user_id);
+create policy "Users can insert their own document groups" on document_groups for insert with check (auth.uid() = user_id);
+create policy "Users can update their own document groups" on document_groups for update using (auth.uid() = user_id);
+create policy "Users can delete their own document groups" on document_groups for delete using (auth.uid() = user_id);
+```
+
 #### Table: `documents`
 ```sql
 create table documents (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users not null,
+  group_id uuid references document_groups(id) on delete cascade,
   title text not null,
+  category text,
+  document_number text,
   description text,
   file_url text not null,
   file_path text not null,
@@ -91,6 +110,7 @@ create policy "Users can delete own documents." on documents
 create table scans (
   id uuid default gen_random_uuid() primary key,
   document_id uuid references documents on delete cascade,
+  group_id uuid references document_groups(id) on delete cascade,
   scanned_at timestamp with time zone default timezone('utc'::text, now()) not null,
   ip_address text
 );
@@ -101,13 +121,11 @@ alter table scans enable row level security;
 create policy "Scans are insertable by everyone." on scans
   for insert with check (true);
 
-create policy "Users can view scans for their own documents." on scans
+create policy "Users can view scans for their own documents and groups." on scans
   for select using (
-    exists (
-      select 1 from documents 
-      where documents.id = scans.document_id 
-      and documents.user_id = auth.uid()
-    )
+    exists (select 1 from documents where documents.id = scans.document_id and documents.user_id = auth.uid())
+    or
+    exists (select 1 from document_groups where document_groups.id = scans.group_id and document_groups.user_id = auth.uid())
   );
 ```
 
